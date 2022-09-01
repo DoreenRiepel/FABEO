@@ -1,11 +1,11 @@
 '''
-Brent Waters
+John Bethencourt, Amit Sahai, Brent Waters
 
-| From: "Ciphertext-Policy Attribute-Based Encryption: An Expressive, Efficient, and Provably Secure Realization"
-| Published in: 2011
-| Available from: https://doi.org/10.1007/978-3-642-19379-8_4
-| Notes: Implemented an asymmetric version of the scheme in Section 3
-| Security Assumption: Decisional Parallel Bilinear Diffie-Hellman Exponent
+| From: "Ciphertext-Policy Attribute-Based Encryption"
+| Published in: 2007
+| Available from: https://doi.org/10.1109/SP.2007.11
+| Notes: Implemented an asymmetric version of the scheme in Section 4.2
+| Security Assumption: Generic group model
 |
 | type:           ciphertext-policy attribute-based encryption
 | setting:        Pairing
@@ -21,12 +21,12 @@ from ..msp import MSP
 debug = False
 
 
-class Waters11(ABEnc):
+class BSW07CPABE(ABEnc):
 
-    def __init__(self, group_obj, uni_size, verbose=False):
+    def __init__(self, group_obj, verbose=False):
         ABEnc.__init__(self)
+        self.name = "BSW07 CP-ABE"
         self.group = group_obj
-        self.uni_size = uni_size  # bound on the size of the universe of attributes
         self.util = MSP(self.group, verbose)
 
     def setup(self):
@@ -37,22 +37,20 @@ class Waters11(ABEnc):
         if debug:
             print('Setup algorithm:\n')
 
-        # pick a random element each from two source groups and pair them
+        # pick a random element each from two source groups
         g1 = self.group.random(G1)
         g2 = self.group.random(G2)
+
+        beta = self.group.random(ZR)
+        h = g2 ** beta
+        f = g2 ** (1/beta)
+
         alpha = self.group.random(ZR)
         g1_alpha = g1 ** alpha
-        e_gg_alpha = pair(g1_alpha, g2)
+        e_gg_alpha = pair (g1_alpha, g2)
 
-        a = self.group.random(ZR)
-        g1_a = g1 ** a
-
-        h = [0]
-        for i in range(self.uni_size):
-            h.append(self.group.random(G1))
-
-        pk = {'g1': g1, 'g2': g2, 'g1_a': g1_a, 'h': h, 'e_gg_alpha': e_gg_alpha}
-        msk = {'g1_alpha': g1_alpha}
+        pk = {'g1': g1, 'g2': g2, 'h': h, 'f': f, 'e_gg_alpha': e_gg_alpha}
+        msk = {'beta': beta, 'g1_alpha': g1_alpha}
         return pk, msk
 
     def keygen(self, pk, msk, attr_list):
@@ -63,19 +61,23 @@ class Waters11(ABEnc):
         if debug:
             print('Key generation algorithm:\n')
 
-        t = self.group.random(ZR)
-        k0 = msk['g1_alpha'] * (pk['g1_a'] ** t)
-        L = pk['g2'] ** t
+        r = self.group.random(ZR)
+        g1_r = pk['g1'] ** r
+        beta_inverse = 1 / msk['beta']
+        k0 = (msk['g1_alpha'] * g1_r) ** beta_inverse
 
         K = {}
         for attr in attr_list:
-            K[attr] = pk['h'][int(attr)] ** t
+            r_attr = self.group.random(ZR)
+            k_attr1 = g1_r * (self.group.hash(str(attr), G1) ** r_attr)
+            k_attr2 = pk['g2'] ** r_attr
+            K[attr] = (k_attr1, k_attr2)
 
-        return {'attr_list': attr_list, 'k0': k0, 'L': L, 'K': K}
+        return {'attr_list': attr_list, 'k0': k0, 'K': K}
 
     def encrypt(self, pk, msg, policy_str):
         """
-         Encrypt a message M under a monotone span program.
+         Encrypt a message M under a policy string.
         """
 
         if debug:
@@ -92,25 +94,22 @@ class Waters11(ABEnc):
             u.append(rand)
         s = u[0]    # shared secret
 
-        c0 = pk['g2'] ** s
+        c0 = pk['h'] ** s
 
         C = {}
-        D = {}
         for attr, row in mono_span_prog.items():
             cols = len(row)
             sum = 0
             for i in range(cols):
                 sum += row[i] * u[i]
             attr_stripped = self.util.strip_index(attr)
-            r_attr = self.group.random(ZR)
-            c_attr = (pk['g1_a'] ** sum) / (pk['h'][int(attr_stripped)] ** r_attr)
-            d_attr = pk['g2'] ** r_attr
-            C[attr] = c_attr
-            D[attr] = d_attr
+            c_i1 = pk['g2'] ** sum
+            c_i2 = self.group.hash(str(attr_stripped), G1) ** sum
+            C[attr] = (c_i1, c_i2)
 
         c_m = (pk['e_gg_alpha'] ** s) * msg
 
-        return {'policy': policy, 'c0': c0, 'C': C, 'D': D, 'c_m': c_m}
+        return {'policy': policy, 'c0': c0, 'C': C, 'c_m': c_m}
 
     def decrypt(self, pk, ctxt, key):
         """
@@ -125,13 +124,13 @@ class Waters11(ABEnc):
             print ("Policy not satisfied.")
             return None
 
-        prodG = 1
-        prodGT = 1
+        prod = 1
 
         for node in nodes:
             attr = node.getAttributeAndIndex()
             attr_stripped = self.util.strip_index(attr)
-            prodG *= ctxt['C'][attr]
-            prodGT *= pair(key['K'][attr_stripped], ctxt['D'][attr])
+            (c_attr1, c_attr2) = ctxt['C'][attr]
+            (k_attr1, k_attr2) = key['K'][attr_stripped]
+            prod *= (pair(k_attr1, c_attr1) / pair(c_attr2, k_attr2))
 
-        return (ctxt['c_m'] * pair(prodG, key['L']) * prodGT) / (pair(key['k0'], ctxt['c0']))
+        return (ctxt['c_m'] * prod) / (pair(key['k0'], ctxt['c0']))

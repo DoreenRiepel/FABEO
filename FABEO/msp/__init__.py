@@ -26,6 +26,7 @@ class MSP:
         """
 
         assert type(policy_string) is str, "invalid type for policy_string"
+        policy_string = unicode(policy_string)
         parser = PolicyParser()
         policy_obj = parser.parse(policy_string)
         _dictCount, _dictLabel = {}, {}

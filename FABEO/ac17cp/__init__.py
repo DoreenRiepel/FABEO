@@ -24,6 +24,7 @@ debug = False
 class AC17CPABE(ABEnc):
     def __init__(self, group_obj, assump_size, verbose=False):
         ABEnc.__init__(self)
+        self.name = "AC17 CP-ABE k=" + str(assump_size)
         self.group = group_obj
         self.assump_size = assump_size  # size of linear assumption, at least 2
         self.util = MSP(self.group, verbose)
