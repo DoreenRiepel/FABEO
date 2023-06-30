@@ -60,7 +60,7 @@ RUN    rm gmp-5.1.3.tar.gz \
 RUN    apt install -y git
 RUN    rm /usr/local/lib/libgmp.so*
 
-RUN    git clone https://github.com/fh15vprm49/FABEO.git
+RUN    git clone https://github.com/DoreenRiepel/FABEO.git
 
 
 RUN    cd FABEO \

@@ -10,7 +10,7 @@ setuptools.setup(
     description="Attribute-based Encryption",
     long_description=LONG_DESCRIPTION,
     long_description_content_type="text/markdown",
-    url="https://github.com/fh15vprm49/FABEO.git",
+    url="https://github.com/DoreenRiepel/FABEO.git",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 2",

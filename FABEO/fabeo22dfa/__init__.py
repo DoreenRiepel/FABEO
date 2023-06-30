@@ -9,7 +9,7 @@ Doreen Riepel, Hoeteck Wee
 | setting:        Pairing
 
 :Authors:         Doreen Riepel
-:Date:            08/2022
+:Date:            06/2023
 '''
 
 from charm.toolbox.pairinggroup import PairingGroup,ZR,G1,G2,GT,pair
@@ -27,9 +27,9 @@ class FABEO22DFA:
     def setup(self, alphabet):
         
         # pick a random element from the two source groups and pair them
-        g = self.group.random(G1)
-        h = self.group.random(G2)
-        e_gh = pair(g, h)
+        g1 = self.group.random(G1)
+        g2 = self.group.random(G2)
+        e_g1g2 = pair(g1, g2)
 
         w_start, w_end, z = self.group.random(ZR,3)
 
@@ -37,15 +37,15 @@ class FABEO22DFA:
         for sigma in alphabet:
             w[str(sigma)] = self.group.random(ZR)
         
-        g_w = {}
+        g1_w = {}
         for label, w_i in w.items():
-            g_w[label] = g ** w_i
-        g_z = g ** z
+            g1_w[label] = g1 ** w_i
+        g1_z = g1 ** z
         
         alpha = self.group.random(ZR)
         
-        msk = {'h': h, 'z': z, 'w':w, 'alpha': alpha}
-        mpk = {'g': g, 'g_z':g_z, 'g_w':g_w, 'e_gh_alpha':e_gh ** alpha }
+        msk = {'g2': g2, 'z': z, 'w':w, 'alpha': alpha}
+        mpk = {'g1': g1, 'g1_z':g1_z, 'g1_w':g1_w, 'e_g1g2_alpha':e_g1g2 ** alpha }
         return (mpk, msk)
 
     def keygen(self, mpk, msk, dfaM):
@@ -55,58 +55,58 @@ class FABEO22DFA:
 
         d = {}
         r = {}
-        h_r = {}
+        g2_r = {}
 
         for u in Q:
             d_u = self.group.random(ZR)
             d[str(u)] = d_u
             r_u = self.group.random(ZR)
             r[str(u)] = r_u
-            h_r[str(u)] = msk['h'] ** r_u
+            g2_r[str(u)] = msk['g2'] ** r_u
 
         K = {}
-        K['start1'] = msk['h'] ** (d[str(Q[0])] + msk['w']['start'] * r[str(Q[0])])
-        K['start2'] = msk['h'] ** r[str(Q[0])]
+        K['start1'] = msk['g2'] ** (d[str(Q[0])] + msk['w']['start'] * r[str(Q[0])])
+        K['start2'] = msk['g2'] ** r[str(Q[0])]
 
         
         for t in T: # for each tuple, t in transition list
             (x, y, sigma) = t
             K[str(t)] = {}
-            K[str(t)][1] = msk['h'] ** (-d[str(x)] + msk['z'] * r[str(x)])
+            K[str(t)][1] = msk['g2'] ** (-d[str(x)] + msk['z'] * r[str(x)])
            # K[str(t)][2] = msk['h'] ** r[str(x)]
-            K[str(t)][3] = msk['h'] ** (d[str(y)] + msk['w'][str(sigma)] * r[str(x)])
+            K[str(t)][3] = msk['g2'] ** (d[str(y)] + msk['w'][str(sigma)] * r[str(x)])
 
         # for each accept state in the set of all accept states
         K['end'] = {}
         for x in F:
             K['end'][str(x)] = {}
-            K['end'][str(x)][1] = msk['h'] ** (msk['alpha'] - d[str(x)] + msk['w']['end'] * r[str(x)])
+            K['end'][str(x)][1] = msk['g2'] ** (msk['alpha'] - d[str(x)] + msk['w']['end'] * r[str(x)])
            # K['end'][str(x)][2] = msk['h'] ** r[str(x)]
             
-        sk = {'K':K, 'h_r':h_r, 'dfaM':dfaM }
+        sk = {'K':K, 'g2_r':g2_r, 'dfaM':dfaM }
         return sk
 
     def encrypt(self, mpk, x, M):
         l = len(x) # symbols of string        
         s = self.group.random(ZR, l+1) # l+1 b/c it includes 'l'-th index
         C = {}
-        C['m'] = M * (mpk['e_gh_alpha'] ** s[l])
+        C['m'] = M * (mpk['e_g1g2_alpha'] ** s[l])
         
         C[0] = {}
-        C[0][1] = mpk['g'] ** s[0]
-        C[0][2] = mpk['g_w']['start'] ** s[0]
+        C[0][1] = mpk['g1'] ** s[0]
+        C[0][2] = mpk['g1_w']['start'] ** s[0]
         
         for i in range(1, l+1):
             C[i] = {}
-            C[i][1] = mpk['g'] ** s[i]
-            C[i][2] = (mpk['g_z'] ** s[i-1]) * (mpk['g_w'][str(x[i])] ** s[i])
+            C[i][1] = mpk['g1'] ** s[i]
+            C[i][2] = (mpk['g1_z'] ** s[i-1]) * (mpk['g1_w'][str(x[i])] ** s[i])
         
-        C['end'] = mpk['g_w']['end'] ** s[l]      
+        C['end'] = mpk['g1_w']['end'] ** s[l]      
         ct = {'C':C, 'x':x}
         return ct
 
     def decrypt(self, sk, ct):
-        K, h_r, dfaM = sk['K'], sk['h_r'], sk['dfaM']
+        K, h_r, dfaM = sk['K'], sk['g2_r'], sk['dfaM']
         C, x = ct['C'], ct['x']
         l = len(x)
         B = {}

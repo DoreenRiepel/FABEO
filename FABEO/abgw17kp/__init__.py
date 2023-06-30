@@ -9,7 +9,7 @@ Miguel Ambrona, Gilles Barthe, Romain Gay, and Hoeteck Wee
 | type:           key-policy attribute-based encryption
 | setting:        Pairing
 
-:Authors:          Doreen Riepel
+:Authors:         Doreen Riepel
 :Date:            4/2022
 '''
 

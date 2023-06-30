@@ -9,7 +9,7 @@ Doreen Riepel, Hoeteck Wee
 | setting:        Pairing
 
 :Authors:         Doreen Riepel
-:Date:            08/2022
+:Date:            06/2023
 '''
 
 from charm.toolbox.pairinggroup import PairingGroup, ZR, G1, G2, GT, pair
@@ -34,18 +34,18 @@ class FABEO22CPABE(ABEnc):
             print('\nSetup algorithm:\n')
 
         # pick a random element from the two source groups and pair them
-        g = self.group.random(G1)
-        h = self.group.random(G2)
-        e_gh = pair(g, h)
+        g1 = self.group.random(G1)
+        g2 = self.group.random(G2)
+        e_g1g2 = pair(g1, g2)
         
         alpha = self.group.random(ZR)
 
         # now compute various parts of the public parameters
-        e_gh_alpha = e_gh ** alpha
+        e_g1g2_alpha = e_g1g2 ** alpha
 
         # the master secret and public key
         msk = {'alpha': alpha}
-        pk = {'g': g, 'h': h, 'e_gh_alpha': e_gh_alpha}
+        pk = {'g1': g1, 'g2': g2, 'e_g1g2_alpha': e_g1g2_alpha}
 
         return pk, msk
 
@@ -58,7 +58,7 @@ class FABEO22CPABE(ABEnc):
             print('\nKey generation algorithm:\n')
 
         r = self.group.random(ZR)
-        h_r = pk['h'] ** r
+        g2_r = pk['g2'] ** r
 
         sk1 = {}
         for attr in attr_list:
@@ -67,9 +67,9 @@ class FABEO22CPABE(ABEnc):
         
         bHash = self.group.hash(str(self.group.order()+1), G1) # ZR+1
         
-        sk2 = pk['g'] ** msk['alpha'] * bHash ** r
+        sk2 = pk['g1'] ** msk['alpha'] * bHash ** r
 
-        return {'attr_list': attr_list, 'h_r': h_r, 'sk1': sk1, 'sk2': sk2}
+        return {'attr_list': attr_list, 'g2_r': g2_r, 'sk1': sk1, 'sk2': sk2}
 
     def encrypt(self, pk, msg, policy_str):
         """
@@ -84,14 +84,14 @@ class FABEO22CPABE(ABEnc):
         num_cols = self.util.len_longest_row
 
         # pick randomness
-        s0 = self.group.random(ZR)
         s1 = self.group.random(ZR)
+        sprime = self.group.random(ZR)
 
-        g_s0 = pk['h'] ** s0
-        h_s1 = pk['h'] ** s1 
+        g2_s1 = pk['g2'] ** s1
+        g2_sprime = pk['g2'] ** sprime
         
         # pick random shares
-        v = [s0]
+        v = [s1]
         for i in range(num_cols-1):
             rand = self.group.random(ZR)
             v.append(rand)
@@ -104,13 +104,13 @@ class FABEO22CPABE(ABEnc):
             attrHash = self.group.hash(attr_stripped, G1)
             len_row = len(row)
             Mivtop = sum(i[0] * i[1] for i in zip(row, v[:len_row]))
-            ct[attr] = bHash ** Mivtop * attrHash ** s1
+            ct[attr] = bHash ** Mivtop * attrHash ** sprime
             
         # compute the e(g, h)^(As) * m term
-        Cp = pk['e_gh_alpha'] ** s0
+        Cp = pk['e_g1g2_alpha'] ** s1
         Cp = Cp * msg
 
-        return {'policy': policy, 'g_s0': g_s0, 'h_s1': h_s1, 'ct': ct, 'Cp': Cp}
+        return {'policy': policy, 'g2_s1': g2_s1, 'g2_sprime': g2_sprime, 'ct': ct, 'Cp': Cp}
 
     def decrypt(self, pk, ctxt, key):
         """
@@ -135,9 +135,9 @@ class FABEO22CPABE(ABEnc):
             prod_sk *= key['sk1'][attr_stripped]
             prod_ct *= ctxt['ct'][attr]
         
-        e0 = pair(key['sk2'], ctxt['g_s0'])
-        e1 = pair(prod_sk, ctxt['h_s1'])
-        e2 = pair(prod_ct, key['h_r'])
+        e0 = pair(key['sk2'], ctxt['g2_s1'])
+        e1 = pair(prod_sk, ctxt['g2_sprime'])
+        e2 = pair(prod_ct, key['g2_r'])
 
         kem = e0 * (e1/e2)
 

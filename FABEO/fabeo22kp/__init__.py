@@ -9,7 +9,7 @@ Doreen Riepel, Hoeteck Wee
 | setting:        Pairing
 
 :Authors:         Doreen Riepel
-:Date:            08/2022
+:Date:            06/2023
 '''
 
 from charm.toolbox.pairinggroup import PairingGroup, ZR, G1, G2, GT, pair
@@ -35,18 +35,18 @@ class FABEO22KPABE(ABEnc):
             print('\nSetup algorithm:\n')
 
         # pick a random element from the two source groups and pair them
-        g = self.group.random(G1)
-        h = self.group.random(G2)
-        e_gh = pair(g, h)
+        g1 = self.group.random(G1)
+        g2 = self.group.random(G2)
+        e_g1g2 = pair(g1, g2)
         
         alpha = self.group.random(ZR)
 
         # now compute various parts of the public parameters
-        e_gh_alpha = e_gh ** alpha
+        e_g1g2_alpha = e_g1g2 ** alpha
 
         # the master secret and public key
         msk = {'alpha': alpha}
-        pk = {'g': g, 'h': h, 'e_gh_alpha': e_gh_alpha}
+        pk = {'g1': g1, 'g2': g2, 'e_g1g2_alpha': e_g1g2_alpha}
 
         return pk, msk
 
@@ -59,7 +59,7 @@ class FABEO22KPABE(ABEnc):
             print('\nEncryption algorithm:\n')
 
         s = self.group.random(ZR)
-        h_s = pk['h'] ** s
+        g2_s = pk['g2'] ** s
 
         ct = {}
         for attr in attr_list:
@@ -67,10 +67,10 @@ class FABEO22KPABE(ABEnc):
             ct[attr] = attrHash ** s
                     
         # compute the e(g, h)^(As) * m term
-        Cp = pk['e_gh_alpha'] ** s
+        Cp = pk['e_g1g2_alpha'] ** s
         Cp = Cp * msg
 
-        return {'attr_list': attr_list, 'h_s': h_s, 'ct': ct, 'Cp': Cp}
+        return {'attr_list': attr_list, 'g2_s': g2_s, 'ct': ct, 'Cp': Cp}
 
     def keygen(self, pk, msk, policy_str):
         """
@@ -87,7 +87,7 @@ class FABEO22KPABE(ABEnc):
         # pick randomness
         r = self.group.random(ZR)
 
-        h_r = pk['h'] ** r
+        g2_r = pk['g2'] ** r
         
         # pick random shares
         v = [msk['alpha']]
@@ -101,9 +101,9 @@ class FABEO22KPABE(ABEnc):
             attrHash = self.group.hash(attr_stripped, G1)
             len_row = len(row)
             Mivtop = sum(i[0] * i[1] for i in zip(row, v[:len_row]))
-            sk[attr] = pk['g'] ** Mivtop * attrHash ** r
+            sk[attr] = pk['g1'] ** Mivtop * attrHash ** r
 
-        return {'policy': policy, 'h_r': h_r, 'sk': sk}
+        return {'policy': policy, 'g2_r': g2_r, 'sk': sk}
 
     def decrypt(self, pk, ctxt, key):
         """
@@ -128,8 +128,8 @@ class FABEO22KPABE(ABEnc):
             prod_sk *= key['sk'][attr]
             prod_ct *= ctxt['ct'][attr_stripped]
         
-        e1 = pair(prod_sk, ctxt['h_s'])
-        e2 = pair(prod_ct, key['h_r'])
+        e1 = pair(prod_sk, ctxt['g2_s'])
+        e2 = pair(prod_ct, key['g2_r'])
 
         kem = e1/e2
 
